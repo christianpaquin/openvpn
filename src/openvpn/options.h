@@ -634,13 +634,13 @@ struct options
     bool show_net_up;
     int route_method;
     bool block_outside_dns;
-    bool wintun;
+    enum windows_driver_type windows_driver;
 #endif
 
     bool use_peer_id;
     uint32_t peer_id;
 
-#if defined(ENABLE_CRYPTO_OPENSSL) && OPENSSL_VERSION_NUMBER >= 0x10001000
+#ifdef HAVE_EXPORT_KEYING_MATERIAL
     /* Keying Material Exporters [RFC 5705] */
     const char *keying_material_exporter_label;
     int keying_material_exporter_length;

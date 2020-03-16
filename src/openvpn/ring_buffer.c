@@ -5,7 +5,8 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2011 - David Sommerseth <davids@redhat.com>
+ *  Copyright (C) 2002-2019 OpenVPN Inc <sales@openvpn.net>
+ *                2019 Lev Stipakov <lev@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -21,57 +22,35 @@
  *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef COMPAT_H
-#define COMPAT_H
+#include "ring_buffer.h"
 
-#ifdef HAVE_WINSOCK2_H
-#include <winsock2.h>
-#endif
+#ifdef _WIN32
 
-#ifdef HAVE_WS2TCPIP_H
-#include <ws2tcpip.h>
-#endif
+bool
+register_ring_buffers(HANDLE device,
+                      struct tun_ring *send_ring,
+                      struct tun_ring *receive_ring,
+                      HANDLE send_tail_moved,
+                      HANDLE receive_tail_moved)
+{
+    struct tun_register_rings rr;
+    BOOL res;
+    DWORD bytes_returned;
 
-#ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>
-#endif
+    ZeroMemory(&rr, sizeof(rr));
 
-#ifdef HAVE_SYS_SOCKET_H
-#include <sys/socket.h>
-#endif
+    rr.send.ring = send_ring;
+    rr.send.ring_size = sizeof(struct tun_ring);
+    rr.send.tail_moved = send_tail_moved;
 
-#ifndef HAVE_DIRNAME
-char *dirname(char *str);
+    rr.receive.ring = receive_ring;
+    rr.receive.ring_size = sizeof(struct tun_ring);
+    rr.receive.tail_moved = receive_tail_moved;
 
-#endif /* HAVE_DIRNAME */
+    res = DeviceIoControl(device, TUN_IOCTL_REGISTER_RINGS, &rr, sizeof(rr),
+                          NULL, 0, &bytes_returned, NULL);
 
-#ifndef HAVE_BASENAME
-char *basename(char *str);
+    return res != FALSE;
+}
 
-#endif /* HAVE_BASENAME */
-
-#ifndef HAVE_GETTIMEOFDAY
-int gettimeofday(struct timeval *tv, void *tz);
-
-#endif
-
-#ifndef HAVE_DAEMON
-int daemon(int nochdir, int noclose);
-
-#endif
-
-#ifndef HAVE_INET_NTOP
-const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
-
-#endif
-
-#ifndef HAVE_INET_PTON
-int inet_pton(int af, const char *src, void *dst);
-
-#endif
-
-#ifndef HAVE_STRSEP
-char* strsep(char **stringp, const char *delim);
-#endif
-
-#endif /* COMPAT_H */
+#endif /* ifdef _WIN32 */

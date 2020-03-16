@@ -45,6 +45,7 @@
 #include "shaper.h"
 #include "crypto.h"
 #include "ssl.h"
+#include "ssl_ncp.h"
 #include "options.h"
 #include "misc.h"
 #include "socket.h"
@@ -662,7 +663,7 @@ static const char usage_message[] =
     "                  an explicit nsCertType designation t = 'client' | 'server'.\n"
     "--x509-track x  : Save peer X509 attribute x in environment for use by\n"
     "                  plugins and management interface.\n"
-#if defined(ENABLE_CRYPTO_OPENSSL) && OPENSSL_VERSION_NUMBER >= 0x10001000
+#ifdef HAVE_EXPORT_KEYING_MATERIAL
     "--keying-material-exporter label len : Save Exported Keying Material (RFC5705)\n"
     "                  of len bytes (min. 16 bytes) using label in environment for use by plugins.\n"
 #endif
@@ -854,7 +855,7 @@ init_options(struct options *o, const bool init_gc)
     o->tuntap_options.dhcp_masq_offset = 0;     /* use network address as internal DHCP server address */
     o->route_method = ROUTE_METHOD_ADAPTIVE;
     o->block_outside_dns = false;
-    o->wintun = false;
+    o->windows_driver = WINDOWS_DRIVER_TAP_WINDOWS6;
 #endif
     o->vlan_accept = VLAN_ALL;
     o->vlan_pvid = 1;
@@ -2204,7 +2205,12 @@ options_postprocess_verify_ce(const struct options *options, const struct connec
     {
         msg(M_USAGE, "--dhcp-options requires --ip-win32 dynamic or adaptive");
     }
-#endif
+
+    if (options->windows_driver == WINDOWS_DRIVER_WINTUN && dev != DEV_TYPE_TUN)
+    {
+        msg(M_USAGE, "--windows-driver wintun requires --dev tun");
+    }
+#endif /* ifdef _WIN32 */
 
     /*
      * Check that protocol options make sense.
@@ -3001,9 +3007,18 @@ options_postprocess_mutate_invariant(struct options *options)
     }
 
 #ifdef _WIN32
+    /* when using wintun, kernel doesn't send DHCP requests, so use netsh to set IP address and netmask */
+    if (options->windows_driver == WINDOWS_DRIVER_WINTUN)
+    {
+        options->tuntap_options.ip_win32_type = IPW32_SET_NETSH;
+    }
+
     if ((dev == DEV_TYPE_TUN || dev == DEV_TYPE_TAP) && !options->route_delay_defined)
     {
-        if (options->mode == MODE_POINT_TO_POINT)
+        /* delay may only be necessary when we perform DHCP handshake */
+        const bool dhcp = (options->tuntap_options.ip_win32_type == IPW32_SET_DHCP_MASQ)
+                          || (options->tuntap_options.ip_win32_type == IPW32_SET_ADAPTIVE);
+        if ((options->mode == MODE_POINT_TO_POINT) && dhcp)
         {
             options->route_delay_defined = true;
             options->route_delay = 5; /* Vista sometimes has a race without this */
@@ -3016,14 +3031,8 @@ options_postprocess_mutate_invariant(struct options *options)
         options->ifconfig_noexec = false;
     }
 
-    /* for wintun kernel doesn't send DHCP requests, so use ipapi to set IP address and netmask */
-    if (options->wintun)
-    {
-        options->tuntap_options.ip_win32_type = IPW32_SET_IPAPI;
-    }
-
     remap_redirect_gateway_flags(options);
-#endif
+#endif /* ifdef _WIN32 */
 
 #if P2MP_SERVER
     /*
@@ -3346,7 +3355,7 @@ check_cmd_access(const char *command, const char *opt, const char *chroot)
         return_code = true;
     }
 
-    argv_reset(&argv);
+    argv_free(&argv);
 
     return return_code;
 }
@@ -4073,23 +4082,23 @@ foreign_option(struct options *o, char *argv[], int len, struct env_set *es)
  *
  * @param str       value of --windows-driver option
  * @param msglevel  msglevel to report parsing error
- * @return bool     true if --windows-driver is wintun, false otherwise
+ * @return enum windows_driver_type  driver type, WINDOWS_DRIVER_UNSPECIFIED on unknown --windows-driver value
  */
-static bool
+static enum windows_driver_type
 parse_windows_driver(const char *str, const int msglevel)
 {
     if (streq(str, "tap-windows6"))
     {
-        return false;
+        return WINDOWS_DRIVER_TAP_WINDOWS6;
     }
     else if (streq(str, "wintun"))
     {
-        return true;
+        return WINDOWS_DRIVER_WINTUN;
     }
     else
     {
         msg(msglevel, "--windows-driver must be tap-windows6 or wintun");
-        return false;
+        return WINDOWS_DRIVER_UNSPECIFIED;
     }
 }
 #endif
@@ -5364,7 +5373,7 @@ add_option(struct options *options,
     else if (streq(p[0], "windows-driver") && p[1] && !p[2])
     {
         VERIFY_PERMISSION(OPT_P_GENERAL);
-        options->wintun = parse_windows_driver(p[1], M_FATAL);
+        options->windows_driver = parse_windows_driver(p[1], M_FATAL);
     }
 #endif
     else if (streq(p[0], "dev-node") && p[1] && !p[2])
@@ -8503,7 +8512,7 @@ add_option(struct options *options,
         options->use_peer_id = true;
         options->peer_id = atoi(p[1]);
     }
-#if defined(ENABLE_CRYPTO_OPENSSL) && OPENSSL_VERSION_NUMBER >= 0x10001000
+#ifdef HAVE_EXPORT_KEYING_MATERIAL
     else if (streq(p[0], "keying-material-exporter") && p[1] && p[2])
     {
         int ekm_length = positive_atoi(p[2]);

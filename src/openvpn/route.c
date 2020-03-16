@@ -1621,7 +1621,7 @@ add_route(struct route_ipv4 *r,
 #elif defined (_WIN32)
     {
         DWORD ai = TUN_ADAPTER_INDEX_INVALID;
-        argv_printf(&argv, "%s%sc ADD %s MASK %s %s",
+        argv_printf(&argv, "%s%s ADD %s MASK %s %s",
                     get_win_sys_path(),
                     WIN_ROUTE_PATH_SUFFIX,
                     network,
@@ -1822,7 +1822,7 @@ done:
     {
         r->flags &= ~RT_ADDED;
     }
-    argv_reset(&argv);
+    argv_free(&argv);
     gc_free(&gc);
     /* release resources potentially allocated during route setup */
     net_ctx_reset(ctx);
@@ -1984,7 +1984,7 @@ add_route_ipv6(struct route_ipv6 *r6, const struct tuntap *tt,
         device = buf_bptr(&out);
 
         /* netsh interface ipv6 add route 2001:db8::/32 MyTunDevice */
-        argv_printf(&argv, "%s%sc interface ipv6 add route %s/%d %s",
+        argv_printf(&argv, "%s%s interface ipv6 add route %s/%d %s",
                     get_win_sys_path(),
                     NETSH_PATH_SUFFIX,
                     network,
@@ -2128,7 +2128,7 @@ done:
     {
         r6->flags &= ~RT_ADDED;
     }
-    argv_reset(&argv);
+    argv_free(&argv);
     gc_free(&gc);
     /* release resources potentially allocated during route setup */
     net_ctx_reset(ctx);
@@ -2194,7 +2194,7 @@ delete_route(struct route_ipv4 *r,
     }
 #elif defined (_WIN32)
 
-    argv_printf(&argv, "%s%sc DELETE %s MASK %s %s",
+    argv_printf(&argv, "%s%s DELETE %s MASK %s %s",
                 get_win_sys_path(),
                 WIN_ROUTE_PATH_SUFFIX,
                 network,
@@ -2322,7 +2322,7 @@ delete_route(struct route_ipv4 *r,
 
 done:
     r->flags &= ~RT_ADDED;
-    argv_reset(&argv);
+    argv_free(&argv);
     gc_free(&gc);
     /* release resources potentially allocated during route cleanup */
     net_ctx_reset(ctx);
@@ -2428,7 +2428,7 @@ delete_route_ipv6(const struct route_ipv6 *r6, const struct tuntap *tt,
         device = buf_bptr(&out);
 
         /* netsh interface ipv6 delete route 2001:db8::/32 MyTunDevice */
-        argv_printf(&argv, "%s%sc interface ipv6 delete route %s/%d %s",
+        argv_printf(&argv, "%s%s interface ipv6 delete route %s/%d %s",
                     get_win_sys_path(),
                     NETSH_PATH_SUFFIX,
                     network,
@@ -2550,7 +2550,7 @@ delete_route_ipv6(const struct route_ipv6 *r6, const struct tuntap *tt,
     msg(M_FATAL, "Sorry, but I don't know how to do 'route ipv6' commands on this operating system.  Try putting your routes in a --route-down script");
 #endif /* if defined(TARGET_LINUX) */
 
-    argv_reset(&argv);
+    argv_free(&argv);
     gc_free(&gc);
     /* release resources potentially allocated during route cleanup */
     net_ctx_reset(ctx);

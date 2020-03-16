@@ -655,7 +655,7 @@ AC_CHECK_FUNCS([ \
 	ctime memset vsnprintf strdup \
 	setsid chdir putenv getpeername unlink \
 	chsize ftruncate execve getpeereid umask basename dirname access \
-	epoll_create \
+	epoll_create strsep \
 ])
 
 AC_CHECK_LIB(
@@ -906,10 +906,17 @@ if test "${with_crypto_library}" = "openssl"; then
 	fi
 
 	have_crypto_aead_modes="yes"
-	AC_CHECK_FUNCS(
+	AC_CHECK_FUNC(
 		[EVP_aes_256_gcm],
 		,
-		[have_crypto_aead_modes="no"; break]
+		[have_crypto_aead_modes="no"]
+	)
+
+	have_export_keying_material="yes"
+	AC_CHECK_FUNC(
+		[SSL_export_keying_material],
+		,
+		[have_export_keying_material="no"]
 	)
 
 	AC_CHECK_FUNCS(
@@ -1008,6 +1015,13 @@ elif test "${with_crypto_library}" = "mbedtls"; then
 		],
 		,
 		[have_crypto_aead_modes="no"; break]
+	)
+
+	have_export_keying_material="yes"
+	AC_CHECK_FUNC(
+		[mbedtls_ssl_conf_export_keys_ext_cb],
+		,
+		[have_export_keying_material="no"]
 	)
 
 	CFLAGS="${saved_CFLAGS}"
@@ -1217,6 +1231,12 @@ test "${enable_strict_options}" = "yes" && AC_DEFINE([ENABLE_STRICT_OPTIONS_CHEC
 
 test "${enable_crypto_ofb_cfb}" = "yes" && AC_DEFINE([ENABLE_OFB_CFB_MODE], [1], [Enable OFB and CFB cipher modes])
 test "${have_crypto_aead_modes}" = "yes" && AC_DEFINE([HAVE_AEAD_CIPHER_MODES], [1], [Use crypto library])
+if test "${have_export_keying_material}" = "yes"; then
+	AC_DEFINE(
+		[HAVE_EXPORT_KEYING_MATERIAL], [1],
+		[Crypto library supports keying material exporter]
+	)
+fi
 OPTIONAL_CRYPTO_CFLAGS="${OPTIONAL_CRYPTO_CFLAGS} ${CRYPTO_CFLAGS}"
 OPTIONAL_CRYPTO_LIBS="${OPTIONAL_CRYPTO_LIBS} ${CRYPTO_LIBS}"
 
@@ -1319,11 +1339,25 @@ if test "${enable_plugin_auth_pam}" = "yes"; then
 fi
 
 if test "${enable_async_push}" = "yes"; then
-	AC_CHECK_HEADERS(
-		[sys/inotify.h],
-		AC_DEFINE([ENABLE_ASYNC_PUSH], [1], [Enable async push]),
-		AC_MSG_ERROR([inotify.h not found.])
-	)
+	case "$host" in
+		*-*-freebsd*)
+			PKG_CHECK_MODULES(
+				[OPTIONAL_INOTIFY],
+				[libinotify],
+				[
+					AC_DEFINE([HAVE_SYS_INOTIFY_H])
+					AC_DEFINE([ENABLE_ASYNC_PUSH], [1], [Enable async push])
+				]
+			)
+		;;
+		*)
+			AC_CHECK_HEADERS(
+				[sys/inotify.h],
+				AC_DEFINE([ENABLE_ASYNC_PUSH], [1], [Enable async push]),
+				AC_MSG_ERROR([inotify.h not found.])
+			)
+		;;
+	esac
 fi
 
 CONFIGURE_DEFINES="`set | grep '^enable_.*=' ; set | grep '^with_.*='`"
@@ -1350,6 +1384,8 @@ AC_SUBST([OPTIONAL_LZ4_LIBS])
 AC_SUBST([OPTIONAL_SYSTEMD_LIBS])
 AC_SUBST([OPTIONAL_PKCS11_HELPER_CFLAGS])
 AC_SUBST([OPTIONAL_PKCS11_HELPER_LIBS])
+AC_SUBST([OPTIONAL_INOTIFY_CFLAGS])
+AC_SUBST([OPTIONAL_INOTIFY_LIBS])
 
 AC_SUBST([PLUGIN_AUTH_PAM_CFLAGS])
 AC_SUBST([PLUGIN_AUTH_PAM_LIBS])

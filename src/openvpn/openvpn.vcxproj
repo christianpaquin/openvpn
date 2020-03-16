@@ -181,6 +181,7 @@
     <ClCompile Include="ps.c" />
     <ClCompile Include="push.c" />
     <ClCompile Include="reliable.c" />
+    <ClCompile Include="ring_buffer.c" />
     <ClCompile Include="route.c" />
     <ClCompile Include="run_command.c" />
     <ClCompile Include="schedule.c" />
@@ -191,6 +192,7 @@
     <ClCompile Include="socks.c" />
     <ClCompile Include="ssl.c" />
     <ClCompile Include="ssl_openssl.c" />
+    <ClCompile Include="ssl_ncp.c" />
     <ClCompile Include="ssl_verify.c" />
     <ClCompile Include="ssl_verify_openssl.c" />
     <ClCompile Include="status.c" />
@@ -265,6 +267,7 @@
     <ClInclude Include="push.h" />
     <ClInclude Include="pushlist.h" />
     <ClInclude Include="reliable.h" />
+    <ClInclude Include="ring_buffer.h" />
     <ClInclude Include="route.h" />
     <ClInclude Include="run_command.h" />
     <ClInclude Include="schedule.h" />
@@ -276,6 +279,7 @@
     <ClInclude Include="ssl.h" />
     <ClInclude Include="ssl_backend.h" />
     <ClInclude Include="ssl_common.h" />
+    <ClInclude Include="ssl_ncp.h" />
     <ClInclude Include="ssl_openssl.h" />
     <ClInclude Include="ssl_verify.h" />
     <ClInclude Include="ssl_verify_backend.h" />

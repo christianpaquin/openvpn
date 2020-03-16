@@ -59,6 +59,7 @@
 #include "ssl.h"
 #include "ssl_verify.h"
 #include "ssl_backend.h"
+#include "ssl_ncp.h"
 #include "auth_token.h"
 
 #include "memdbg.h"
@@ -66,6 +67,7 @@
 #ifndef ENABLE_OCC
 static const char ssl_default_options_string[] = "V0 UNDEF";
 #endif
+
 
 static inline const char *
 local_options_string(const struct tls_session *session)
@@ -1914,40 +1916,6 @@ key_ctx_update_implicit_iv(struct key_ctx *ctx, uint8_t *key, size_t key_len)
     }
 }
 
-bool
-tls_item_in_cipher_list(const char *item, const char *list)
-{
-    char *tmp_ciphers = string_alloc(list, NULL);
-    char *tmp_ciphers_orig = tmp_ciphers;
-
-    const char *token = strtok(tmp_ciphers, ":");
-    while (token)
-    {
-        if (0 == strcmp(token, item))
-        {
-            break;
-        }
-        token = strtok(NULL, ":");
-    }
-    free(tmp_ciphers_orig);
-
-    return token != NULL;
-}
-
-void
-tls_poor_mans_ncp(struct options *o, const char *remote_ciphername)
-{
-    if (o->ncp_enabled && remote_ciphername
-        && 0 != strcmp(o->ciphername, remote_ciphername))
-    {
-        if (tls_item_in_cipher_list(remote_ciphername, o->ncp_ciphers))
-        {
-            o->ciphername = string_alloc(remote_ciphername, &o->gc);
-            msg(D_TLS_DEBUG_LOW, "Using peer cipher '%s'", o->ciphername);
-        }
-    }
-}
-
 /**
  * Generate data channel keys for the supplied TLS session.
  *
@@ -2324,7 +2292,13 @@ push_peer_info(struct buffer *buf, struct tls_session *session)
         if (session->opt->ncp_enabled
             && (session->opt->mode == MODE_SERVER || session->opt->pull))
         {
-            buf_printf(&out, "IV_NCP=2\n");
+            if (tls_item_in_cipher_list("AES-128-GCM", session->opt->config_ncp_ciphers)
+                && tls_item_in_cipher_list("AES-256-GCM", session->opt->config_ncp_ciphers))
+            {
+
+                buf_printf(&out, "IV_NCP=2\n");
+            }
+            buf_printf(&out, "IV_CIPHERS=%s\n", session->opt->config_ncp_ciphers);
         }
 
         /* push compression status */
@@ -2631,7 +2605,7 @@ key_method_2_read(struct buffer *buf, struct tls_multi *multi, struct tls_sessio
     multi->remote_ciphername =
         options_string_extract_option(options, "cipher", NULL);
 
-    if (tls_peer_info_ncp_ver(multi->peer_info) < 2)
+    if (!tls_peer_supports_ncp(multi->peer_info))
     {
         /* Peer does not support NCP, but leave NCP enabled if the local and
          * remote cipher do not match to attempt 'poor-man's NCP'.
@@ -4146,45 +4120,6 @@ tls_update_remote_addr(struct tls_multi *multi, const struct link_socket_actual 
         }
     }
     gc_free(&gc);
-}
-
-int
-tls_peer_info_ncp_ver(const char *peer_info)
-{
-    const char *ncpstr = peer_info ? strstr(peer_info, "IV_NCP=") : NULL;
-    if (ncpstr)
-    {
-        int ncp = 0;
-        int r = sscanf(ncpstr, "IV_NCP=%d", &ncp);
-        if (r == 1)
-        {
-            return ncp;
-        }
-    }
-    return 0;
-}
-
-bool
-tls_check_ncp_cipher_list(const char *list)
-{
-    bool unsupported_cipher_found = false;
-
-    ASSERT(list);
-
-    char *const tmp_ciphers = string_alloc(list, NULL);
-    const char *token = strtok(tmp_ciphers, ":");
-    while (token)
-    {
-        if (!cipher_kt_get(translate_cipher_name_from_openvpn(token)))
-        {
-            msg(M_WARN, "Unsupported cipher in --ncp-ciphers: %s", token);
-            unsupported_cipher_found = true;
-        }
-        token = strtok(NULL, ":");
-    }
-    free(tmp_ciphers);
-
-    return 0 < strlen(list) && !unsupported_cipher_found;
 }
 
 void
